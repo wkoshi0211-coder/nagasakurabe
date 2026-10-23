@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>ながさは いくつ？</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #fff;
+    font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #app {
+    width: min(100vw, 1180px);
+    height: min(100vh, 820px);
+    padding: 18px 24px 14px;
+    display: flex;
+    flex-direction: column;
+    background: white;
+  }
+
+  h1 {
+    margin: 0 0 8px;
+    text-align: center;
+    font-size: clamp(30px, 5vw, 48px);
+    line-height: 1.15;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+  }
+
+  #worksheet {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 6px;
+  }
+
+  .question-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 92px;
+    align-items: center;
+    column-gap: 18px;
+    min-height: 110px;
+  }
+
+  .train-line {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding-left: 0;
+    overflow: visible;
+  }
+
+  .train {
+    flex: 0 0 auto;
+    width: clamp(82px, 9.2vw, 108px);
+    height: auto;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: opacity 0.18s ease, filter 0.18s ease, transform 0.1s ease;
+    transform-origin: center;
+  }
+
+  .train:active {
+    transform: scale(0.96);
+  }
+
+  .train.counted {
+    opacity: 0.28;
+    filter: grayscale(0.25);
+  }
+
+  .answer-box {
+    width: 82px;
+    height: 82px;
+    border: 4px solid #111;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    font-weight: 500;
+    background: white;
+  }
+
+  #numbers {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+    padding: 0 4px;
+  }
+
+  .number-button {
+    min-width: 0;
+    height: 76px;
+    border: 3px solid #111;
+    border-radius: 2px;
+    background: white;
+    font-size: 40px;
+    font-family: inherit;
+    font-weight: 400;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .number-button:active {
+    background: #eaf6ff;
+    transform: translateY(1px);
+  }
+
+  .number-button.selected {
+    background: #dff2ff;
+  }
+
+  .answer-box.correct {
+    border-color: #20a44a;
+    background: #effcf3;
+  }
+
+  .answer-box.wrong {
+    border-color: #e34a4a;
+    background: #fff1f1;
+  }
+
+  .train svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  @media (orientation: portrait) {
+    #app {
+      width: 100vw;
+      height: 100vh;
+      padding: 14px 12px 12px;
+    }
+    h1 {
+      font-size: clamp(28px, 7vw, 42px);
+      margin-bottom: 2px;
+    }
+    .question-row {
+      grid-template-columns: minmax(0, 1fr) 78px;
+      column-gap: 10px;
+      min-height: 92px;
+    }
+    .train {
+      width: clamp(62px, 14.5vw, 82px);
+    }
+    .answer-box {
+      width: 70px;
+      height: 70px;
+      font-size: 42px;
+    }
+    .number-button {
+      height: 62px;
+      font-size: 32px;
+      border-width: 2px;
+    }
+    #numbers { gap: 5px; }
+  }
+
+  .task-screen { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .task-screen.active { display: flex; }
+
+  #teacherConfirmArea {
+    min-height: 64px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 4px;
+  }
+
+  #teacherConfirmButton {
+    display: none;
+    position: relative;
+    width: min(340px, 80vw);
+    height: 58px;
+    border: 3px solid #333;
+    border-radius: 10px;
+    background: #f7f7f7;
+    font-family: inherit;
+    font-size: 22px;
+    font-weight: 600;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  #teacherConfirmButton.ready { display: block; }
+  #teacherConfirmButton.holding { background: #eaf4ff; }
+
+  #teacherConfirmButton .hold-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0%;
+    height: 7px;
+    background: #4b9eea;
+    pointer-events: none;
+  }
+
+  #teacherMessage {
+    display: none;
+    text-align: center;
+    font-size: 18px;
+    margin-top: 2px;
+  }
+
+  #pencilTask { justify-content: space-between; }
+
+  #pencilWorksheet {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 8px;
+  }
+
+  .pencil-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 92px;
+    align-items: center;
+    column-gap: 18px;
+    min-height: 105px;
+  }
+
+  .pencil-grid {
+    display: flex;
+    height: 76px;
+    border: 1px solid #555;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .pencil-cell {
+    flex: 1 1 0;
+    min-width: 0;
+    border-right: 1px solid #555;
+    background: #fff;
+  }
+
+  .pencil-cell:last-child { border-right: 0; }
+  .pencil-cell.counted {
+    background: #f8bd00;
+  }
+
+  .pencil-cell {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pencil {
+    position: relative;
+    height: 54px;
+    margin: 10px 3px;
+    pointer-events: none;
+  }
+
+  .pencil-body {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72%;
+    height: 54px;
+    background: #7b963e;
+    border: 2px solid #667d34;
+  }
+
+  .pencil-wood {
+    position: absolute;
+    left: 72%;
+    top: 0;
+    width: 18%;
+    height: 54px;
+    background: #f1d8a9;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
+  .pencil-lead {
+    position: absolute;
+    left: 87%;
+    top: 20px;
+    width: 10%;
+    height: 14px;
+    background: #555;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
+  .pencil-row .answer-box { width: 82px; height: 82px; }
+
+  #pencilNumbers {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+    padding: 0 4px;
+  }
+
+  #pencilConfirmArea {
+    min-height: 64px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 4px;
+  }
+
+  #pencilConfirmButton {
+    position: relative;
+    width: min(340px, 80vw);
+    height: 58px;
+    border: 3px solid #333;
+    border-radius: 10px;
+    background: #f7f7f7;
+    font-family: inherit;
+    font-size: 22px;
+    font-weight: 600;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  #pencilConfirmButton.holding {
+    background: #eaf4ff;
+  }
+
+  #pencilConfirmButton .hold-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0%;
+    height: 7px;
+    background: #4b9eea;
+    pointer-events: none;
+  }
+
+  @media (orientation: portrait) {
+    #teacherConfirmButton { height: 52px; font-size: 19px; }
+    .pencil-row {
+      grid-template-columns: minmax(0, 1fr) 78px;
+      column-gap: 10px;
+      min-height: 90px;
+    }
+    .pencil-grid { height: 62px; }
+    .pencil { height: 44px; margin: 8px 2px; }
+    .pencil-body, .pencil-wood { height: 44px; }
+    .pencil-lead { top: 16px; height: 12px; }
+    .pencil-row .answer-box { width: 70px; height: 70px; }
+    #pencilNumbers { gap: 5px; }
+    #pencilConfirmButton { height: 52px; font-size: 19px; }
+  }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>ながさは いくつ？</h1>
+
+  <section id="trainTask" class="task-screen active" aria-label="電車の車両数を数える課題">
+  <main id="worksheet" aria-label="電車の車両数を数える問題">
+    <div class="question-row" data-answer="4">
+      <div class="train-line" data-row="0"></div>
+      <div class="answer-box" aria-label="1問目の答え"></div>
+    </div>
+
+    <div class="question-row" data-answer="5">
+      <div class="train-line" data-row="1"></div>
+      <div class="answer-box" aria-label="2問目の答え"></div>
+    </div>
+
+    <div class="question-row" data-answer="3">
+      <div class="train-line" data-row="2"></div>
+      <div class="answer-box" aria-label="3問目の答え"></div>
+    </div>
+
+    <div class="question-row" data-answer="6">
+      <div class="train-line" data-row="3"></div>
+      <div class="answer-box" aria-label="4問目の答え"></div>
+    </div>
+  </main>
+  </section>
+
+  <div id="numbers" aria-label="数字ボタン">
+    <button class="number-button" type="button" data-number="1">1</button>
+    <button class="number-button" type="button" data-number="2">2</button>
+    <button class="number-button" type="button" data-number="3">3</button>
+    <button class="number-button" type="button" data-number="4">4</button>
+    <button class="number-button" type="button" data-number="5">5</button>
+    <button class="number-button" type="button" data-number="6">6</button>
+    <button class="number-button" type="button" data-number="7">7</button>
+    <button class="number-button" type="button" data-number="8">8</button>
+    <button class="number-button" type="button" data-number="9">9</button>
+    <button class="number-button" type="button" data-number="0">0</button>
+  </div>
+
+  <div id="teacherConfirmArea">
+    <button id="teacherConfirmButton" type="button" aria-label="確認しました。5秒間長押ししてください。">
+      確認しました
+      <span class="hold-progress"></span>
+    </button>
+  </div>
+  <div id="teacherMessage">4問すべて答えました。先生に確認してもらってください。</div>
+
+  <section id="pencilTask" class="task-screen" aria-label="鉛筆の長さを数える課題">
+    <main id="pencilWorksheet">
+      <div class="pencil-row" data-answer="">
+        <div class="pencil-grid"></div>
+        <div class="answer-box"></div>
+      </div>
+
+      <div class="pencil-row" data-answer="">
+        <div class="pencil-grid"></div>
+        <div class="answer-box"></div>
+      </div>
+
+      <div class="pencil-row" data-answer="">
+        <div class="pencil-grid"></div>
+        <div class="answer-box"></div>
+      </div>
+
+      <div class="pencil-row" data-answer="">
+        <div class="pencil-grid"></div>
+        <div class="answer-box"></div>
+      </div>
+    </main>
+
+    <div id="pencilNumbers" aria-label="数字ボタン">
+      <button class="number-button" type="button" data-number="1">1</button>
+      <button class="number-button" type="button" data-number="2">2</button>
+      <button class="number-button" type="button" data-number="3">3</button>
+      <button class="number-button" type="button" data-number="4">4</button>
+      <button class="number-button" type="button" data-number="5">5</button>
+      <button class="number-button" type="button" data-number="6">6</button>
+      <button class="number-button" type="button" data-number="7">7</button>
+      <button class="number-button" type="button" data-number="8">8</button>
+      <button class="number-button" type="button" data-number="9">9</button>
+      <button class="number-button" type="button" data-number="0">0</button>
+    </div>
+
+    <div id="pencilConfirmArea">
+      <button id="pencilConfirmButton" type="button" aria-label="確認しました。5秒間長押しすると電車の課題に戻ります。">
+        確認しました
+        <span class="hold-progress"></span>
+      </button>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  function trainSVG(color) {
+    return `
+      <svg viewBox="0 0 240 105" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="電車">
+        <!-- roof equipment -->
+        <rect x="64" y="7" width="35" height="7" rx="3" fill="#8c8c8c"/>
+        <rect x="68" y="2" width="27" height="7" rx="3" fill="#aaa"/>
+        <rect x="177" y="7" width="35" height="7" rx="3" fill="#8c8c8c"/>
+        <rect x="181" y="2" width="27" height="7" rx="3" fill="#aaa"/>
+
+        <!-- body -->
+        <rect x="8" y="18" width="224" height="65" rx="8" fill="#f7f7f7" stroke="#777" stroke-width="2"/>
+        <rect x="8" y="18" width="224" height="11" rx="6" fill="${color}"/>
+        <rect x="8" y="70" width="224" height="13" fill="${color}"/>
+
+        <!-- front/rear windows -->
+        <rect x="14" y="33" width="34" height="28" rx="3" fill="#20a7e8" stroke="#888" stroke-width="2"/>
+        <rect x="192" y="33" width="34" height="28" rx="3" fill="#20a7e8" stroke="#888" stroke-width="2"/>
+
+        <!-- doors -->
+        <rect x="50" y="32" width="25" height="32" rx="2" fill="#d9f3ff" stroke="#777" stroke-width="2"/>
+        <line x1="62.5" y1="33" x2="62.5" y2="63" stroke="#777" stroke-width="2"/>
+        <rect x="165" y="32" width="25" height="32" rx="2" fill="#d9f3ff" stroke="#777" stroke-width="2"/>
+        <line x1="177.5" y1="33" x2="177.5" y2="63" stroke="#777" stroke-width="2"/>
+
+        <!-- center windows -->
+        <rect x="79" y="32" width="37" height="28" rx="2" fill="#24a9e7"/>
+        <rect x="121" y="32" width="37" height="28" rx="2" fill="#24a9e7"/>
+        <line x1="98" y1="33" x2="92" y2="59" stroke="#d8f4ff" stroke-width="3" opacity=".9"/>
+        <line x1="140" y1="33" x2="134" y2="59" stroke="#d8f4ff" stroke-width="3" opacity=".9"/>
+
+        <!-- wheels -->
+        <g fill="#555" stroke="#222" stroke-width="2">
+          <circle cx="49" cy="88" r="9"/><circle cx="76" cy="88" r="9"/>
+          <circle cx="164" cy="88" r="9"/><circle cx="191" cy="88" r="9"/>
+        </g>
+        <g fill="#aaa">
+          <circle cx="49" cy="88" r="4"/><circle cx="76" cy="88" r="4"/>
+          <circle cx="164" cy="88" r="4"/><circle cx="191" cy="88" r="4"/>
+        </g>
+        <rect x="0" y="78" width="9" height="6" rx="2" fill="#555"/>
+        <rect x="231" y="78" width="9" height="6" rx="2" fill="#555"/>
+      </svg>`;
+  }
+
+  function createTrain(color) {
+    const button = document.createElement('div');
+    button.className = 'train';
+    button.setAttribute('role', 'button');
+    button.setAttribute('tabindex', '0');
+    button.setAttribute('aria-label', '車両を数える');
+    button.innerHTML = trainSVG(color);
+
+    const markCounted = (event) => {
+      event.preventDefault();
+      button.classList.toggle('counted');
+      button.setAttribute('aria-pressed', button.classList.contains('counted') ? 'true' : 'false');
+    };
+
+    button.addEventListener('pointerup', markCounted);
+    button.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        markCounted(event);
+      }
+    });
+    return button;
+  }
+
+  // 問題ごとに電車の色を変えて、プリントに近い見た目にする。
+  const colors = ['#72c935', '#f4c400', '#ed4a3a', '#168ee6'];
+
+  // 電車の車両数を毎回ランダムにする。
+  // 各問題を1〜7両からランダムに提示する。
+  // 7両の場合でも、右側の解答欄に重ならないサイズで表示する。
+  const trainCounts = [1, 2, 3, 4, 5, 6, 7]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 4);
+
+  document.querySelectorAll('.train-line').forEach((line, rowIndex) => {
+    const count = trainCounts[rowIndex];
+
+    // 正解となる車両数を問題に設定する。
+    line.closest('.question-row').dataset.answer = String(count);
+
+    for (let i = 0; i < count; i++) {
+      line.appendChild(createTrain(colors[rowIndex]));
+    }
+  });
+
+  let selectedRow = null;
+
+  document.querySelectorAll('.answer-box').forEach((box) => {
+    box.addEventListener('click', () => {
+      document.querySelectorAll('.answer-box').forEach(b => b.classList.remove('selected'));
+      box.classList.add('selected');
+      selectedRow = box.closest('.question-row');
+    });
+  });
+
+  document.querySelectorAll('#numbers .number-button').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!selectedRow) {
+        const firstEmpty = [...document.querySelectorAll('.answer-box')].find(b => !b.textContent);
+        if (firstEmpty) {
+          selectedRow = firstEmpty.closest('.question-row');
+          document.querySelectorAll('.answer-box').forEach(b => b.classList.remove('selected'));
+          firstEmpty.classList.add('selected');
+        }
+      }
+
+      if (!selectedRow) return;
+
+      const answerBox = selectedRow.querySelector('.answer-box');
+      const value = button.dataset.number;
+      answerBox.textContent = value;
+
+      const correct = value === selectedRow.dataset.answer;
+      answerBox.classList.remove('correct', 'wrong');
+      answerBox.classList.add(correct ? 'correct' : 'wrong');
+
+      document.querySelectorAll('.number-button').forEach(b => b.classList.remove('selected'));
+      button.classList.add('selected');
+
+      // 正解したら次の未回答問題へ移動。
+      if (correct) {
+        const rows = [...document.querySelectorAll('.question-row')];
+        const next = rows.find(row => !row.querySelector('.answer-box').textContent);
+        if (next) {
+          document.querySelectorAll('.answer-box').forEach(b => b.classList.remove('selected'));
+          next.querySelector('.answer-box').classList.add('selected');
+          selectedRow = next;
+        } else {
+          selectedRow = null;
+          answerBox.classList.remove('selected');
+        }
+      }
+    });
+  });
+
+  // 第1課題を4問すべて正解したときだけ、教師確認ボタンを表示する。
+  function updateTeacherConfirmButton() {
+    const rows = [...document.querySelectorAll('#worksheet .question-row')];
+    const finished = rows.every(row => {
+      const box = row.querySelector('.answer-box');
+      return box.textContent === row.dataset.answer;
+    });
+
+    document.getElementById('teacherConfirmButton').classList.toggle('ready', finished);
+    document.getElementById('teacherMessage').style.display = finished ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('#numbers .number-button').forEach(button => {
+    button.addEventListener('click', updateTeacherConfirmButton);
+  });
+
+  // 「確認しました」は5秒間の長押しでのみ次の課題へ進む。
+  const teacherButton = document.getElementById('teacherConfirmButton');
+  const progress = teacherButton.querySelector('.hold-progress');
+  let holdAnimation = null;
+  let holdStart = 0;
+  let holding = false;
+  const HOLD_MS = 5000;
+
+  function cancelHold() {
+    if (holdAnimation) cancelAnimationFrame(holdAnimation);
+    holdAnimation = null;
+    holding = false;
+    teacherButton.classList.remove('holding');
+    progress.style.width = '0%';
+  }
+
+  function startHold(event) {
+    if (!teacherButton.classList.contains('ready') || holding) return;
+    event.preventDefault();
+
+    holding = true;
+    holdStart = performance.now();
+    teacherButton.classList.add('holding');
+
+    function tick(now) {
+      if (!holding) return;
+      const ratio = Math.min((now - holdStart) / HOLD_MS, 1);
+      progress.style.width = `${ratio * 100}%`;
+
+      if (ratio >= 1) {
+        cancelHold();
+        document.getElementById('trainTask').classList.remove('active');
+        document.getElementById('numbers').style.display = 'none';
+        document.getElementById('teacherConfirmArea').style.display = 'none';
+        document.getElementById('teacherMessage').style.display = 'none';
+        document.getElementById('pencilTask').classList.add('active');
+        selectedRow = null;
+        return;
+      }
+      holdAnimation = requestAnimationFrame(tick);
+    }
+
+    holdAnimation = requestAnimationFrame(tick);
+  }
+
+  teacherButton.addEventListener('pointerdown', startHold);
+  teacherButton.addEventListener('pointerup', cancelHold);
+  teacherButton.addEventListener('pointercancel', cancelHold);
+  teacherButton.addEventListener('pointerleave', cancelHold);
+  teacherButton.addEventListener('contextmenu', event => event.preventDefault());
+
+  // 鉛筆課題：4〜8マスの中から毎回ランダムに4種類を作成する。
+  // 同じ長さが4問に重ならないようにする。
+  function setupPencilTask() {
+    const lengths = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const shuffled = [...lengths].sort(() => Math.random() - 0.5);
+    const selectedLengths = shuffled.slice(0, 4);
+
+    document.querySelectorAll('#pencilTask .pencil-row').forEach((row, rowIndex) => {
+      const length = selectedLengths[rowIndex];
+      row.dataset.answer = String(length);
+
+      const grid = row.querySelector('.pencil-grid');
+      grid.innerHTML = '';
+
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'pencil-cell';
+
+        if (i === 0) {
+          const pencil = document.createElement('div');
+          pencil.className = 'pencil';
+          pencil.innerHTML = `
+            <div class="pencil-body"></div>
+            <div class="pencil-wood"></div>
+            <div class="pencil-lead"></div>
+          `;
+          cell.appendChild(pencil);
+        }
+
+        cell.addEventListener('pointerup', (event) => {
+          event.preventDefault();
+          cell.classList.toggle('counted');
+        });
+
+        grid.appendChild(cell);
+      }
+
+      // 鉛筆本体を、指定された長さのマス数に合わせて表示する。
+      const pencil = grid.querySelector('.pencil');
+      if (pencil) {
+        pencil.style.width = `calc(${length * 100}% - 6px)`;
+      }
+    });
+  }
+
+  setupPencilTask();
+
+  // 鉛筆課題をリセットし、電車課題を新しいランダム問題で再表示する。
+  function resetToTrainTask() {
+    // 鉛筆課題の回答状態を消去。
+    document.querySelectorAll('#pencilTask .answer-box').forEach(box => {
+      box.textContent = '';
+      box.classList.remove('correct', 'wrong', 'selected');
+    });
+    document.querySelectorAll('#pencilNumbers .number-button').forEach(button => {
+      button.classList.remove('selected');
+    });
+    document.querySelectorAll('#pencilTask .pencil-cell').forEach(cell => {
+      cell.classList.remove('counted');
+    });
+
+    // 鉛筆問題を新しい4種類に作り直す。
+    setupPencilTask();
+
+    // 電車課題の回答・選択状態を消去。
+    document.querySelectorAll('#worksheet .answer-box').forEach(box => {
+      box.textContent = '';
+      box.classList.remove('correct', 'wrong', 'selected');
+    });
+    document.querySelectorAll('#numbers .number-button').forEach(button => {
+      button.classList.remove('selected');
+    });
+
+    // 電車を作り直して、1〜7両の新しいランダム問題にする。
+    const colors = ['#72c935', '#f4c400', '#ed4a3a', '#168ee6'];
+    const trainCounts = [1, 2, 3, 4, 5, 6, 7]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 4);
+
+    document.querySelectorAll('.train-line').forEach((line, rowIndex) => {
+      line.innerHTML = '';
+      const count = trainCounts[rowIndex];
+      line.closest('.question-row').dataset.answer = String(count);
+
+      for (let i = 0; i < count; i++) {
+        line.appendChild(createTrain(colors[rowIndex]));
+      }
+    });
+
+    // 電車課題を再表示。
+    document.getElementById('pencilTask').classList.remove('active');
+    document.getElementById('trainTask').classList.add('active');
+    document.getElementById('numbers').style.display = 'grid';
+    document.getElementById('teacherConfirmArea').style.display = 'flex';
+    document.getElementById('teacherMessage').style.display = 'none';
+    document.getElementById('teacherConfirmButton').classList.remove('ready', 'holding');
+
+    selectedRow = null;
+  }
+
+  // 鉛筆課題の「確認しました」は5秒間の長押しでのみ反応する。
+  const pencilConfirmButton = document.getElementById('pencilConfirmButton');
+  const pencilProgress = pencilConfirmButton.querySelector('.hold-progress');
+  let pencilHoldAnimation = null;
+  let pencilHoldStart = 0;
+  let pencilHolding = false;
+  const PENCIL_HOLD_MS = 5000;
+
+  function cancelPencilHold() {
+    if (pencilHoldAnimation) cancelAnimationFrame(pencilHoldAnimation);
+    pencilHoldAnimation = null;
+    pencilHolding = false;
+    pencilConfirmButton.classList.remove('holding');
+    pencilProgress.style.width = '0%';
+  }
+
+  function startPencilHold(event) {
+    event.preventDefault();
+    if (pencilHolding) return;
+
+    pencilHolding = true;
+    pencilHoldStart = performance.now();
+    pencilConfirmButton.classList.add('holding');
+
+    function tick(now) {
+      if (!pencilHolding) return;
+
+      const ratio = Math.min((now - pencilHoldStart) / PENCIL_HOLD_MS, 1);
+      pencilProgress.style.width = `${ratio * 100}%`;
+
+      if (ratio >= 1) {
+        cancelPencilHold();
+        resetToTrainTask();
+        return;
+      }
+
+      pencilHoldAnimation = requestAnimationFrame(tick);
+    }
+
+    pencilHoldAnimation = requestAnimationFrame(tick);
+  }
+
+  pencilConfirmButton.addEventListener('pointerdown', startPencilHold);
+  pencilConfirmButton.addEventListener('pointerup', cancelPencilHold);
+  pencilConfirmButton.addEventListener('pointercancel', cancelPencilHold);
+  pencilConfirmButton.addEventListener('pointerleave', cancelPencilHold);
+  pencilConfirmButton.addEventListener('contextmenu', event => event.preventDefault());
+
+  // 第2課題（添付プリントの鉛筆）の数字入力
+  let pencilSelectedRow = null;
+
+  document.querySelectorAll('#pencilTask .answer-box').forEach(box => {
+    box.addEventListener('click', () => {
+      document.querySelectorAll('#pencilTask .answer-box').forEach(b => b.classList.remove('selected'));
+      box.classList.add('selected');
+      pencilSelectedRow = box.closest('.pencil-row');
+    });
+  });
+
+  document.querySelectorAll('#pencilNumbers .number-button').forEach(button => {
+    button.addEventListener('click', () => {
+      if (!pencilSelectedRow) {
+        const firstEmpty = [...document.querySelectorAll('#pencilTask .answer-box')]
+          .find(b => !b.textContent);
+
+        if (firstEmpty) {
+          pencilSelectedRow = firstEmpty.closest('.pencil-row');
+          document.querySelectorAll('#pencilTask .answer-box').forEach(b => b.classList.remove('selected'));
+          firstEmpty.classList.add('selected');
+        }
+      }
+
+      if (!pencilSelectedRow) return;
+
+      const answerBox = pencilSelectedRow.querySelector('.answer-box');
+      const value = button.dataset.number;
+      answerBox.textContent = value;
+
+      const correct = value === pencilSelectedRow.dataset.answer;
+      answerBox.classList.remove('correct', 'wrong');
+      answerBox.classList.add(correct ? 'correct' : 'wrong');
+
+      document.querySelectorAll('#pencilNumbers .number-button').forEach(b => b.classList.remove('selected'));
+      button.classList.add('selected');
+
+      if (correct) {
+        const next = [...document.querySelectorAll('#pencilTask .pencil-row')]
+          .find(row => !row.querySelector('.answer-box').textContent);
+
+        if (next) {
+          document.querySelectorAll('#pencilTask .answer-box').forEach(b => b.classList.remove('selected'));
+          next.querySelector('.answer-box').classList.add('selected');
+          pencilSelectedRow = next;
+        } else {
+          pencilSelectedRow = null;
+        }
+      }
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
