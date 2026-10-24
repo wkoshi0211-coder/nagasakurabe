@@ -367,6 +367,33 @@
     #pencilConfirmButton { height: 52px; font-size: 19px; }
   }
 
+
+#tapeTask { --unit: min(9.1vw, 107px); gap: 10px; justify-content: space-between; }
+.tape-top { display:flex; justify-content:space-between; align-items:center; font-size:22px; }
+#tapeReset { font:inherit; padding:10px 20px; border:2px solid #555; border-radius:10px; background:white; }
+#tapePrompt { text-align:center; font-size:clamp(22px,3vw,32px); margin:0; }
+#measureArea { position:relative; margin:0 8px; height:165px; flex-shrink:0; }
+#colorTape { position:absolute; top:15px; left:0; height:46px; border-radius:3px; background:#e66599; }
+#startLine { position:absolute; top:5px; left:-3px; height:135px; border-left:3px solid #333; }
+#placedPencils { position:absolute; left:0; top:80px; display:flex; height:50px; }
+.measure-pencil { width:var(--unit); height:48px; padding:0; border:0; background:transparent; touch-action:none; cursor:grab; flex:0 0 var(--unit); }
+.measure-pencil svg { display:block; width:100%; height:48px; pointer-events:none; }
+#pencilBank { display:flex; justify-content:center; gap:0; min-height:64px; align-items:center; background:#f4f4f4; border-radius:12px; padding:8px 0; }
+.bank-slot { width:var(--unit); height:48px; flex:0 0 var(--unit); }
+#tapeHint { text-align:center; font-size:21px; min-height:30px; margin:0; }
+#tapeAnswerArea { display:flex; align-items:center; justify-content:center; gap:16px; }
+#tapeAnswer { width:70px; height:65px; font-size:40px; border:3px solid #222; display:flex; align-items:center; justify-content:center; }
+#tapeNumbers { display:grid; grid-template-columns:repeat(9,1fr); gap:8px; }
+#tapeNumbers button { height:65px; font-size:34px; }
+#tapeNumbers button:disabled { opacity:.35; }
+#tapeDone { display:none; text-align:center; margin:auto; font-size:30px; }
+#tapeDoneButton { display:block; margin:24px auto; font:inherit; padding:18px 40px; border:3px solid #333; border-radius:12px; touch-action:none; background:#f7f7f7; }
+#tapeDoneButton span { display:block; height:6px; margin-top:10px; background:#4b9eea; width:0; }
+#successCircle { display:none; position:fixed; inset:0; z-index:1000; background:rgba(255,255,255,.82); align-items:center; justify-content:center; pointer-events:auto; }
+#successCircle svg { width:95vw; height:95vh; }
+.drag-pencil { position:fixed; z-index:999; pointer-events:none; margin:0; opacity:.95; }
+@media(max-height:650px) { #measureArea {height:135px;} #tapeTask {gap:4px;} #tapeNumbers button {height:52px;} }
+
 </style>
 </head>
 <body>
@@ -461,6 +488,20 @@
       </button>
     </div>
   </section>
+
+<section id="tapeTask" class="task-screen" aria-label="短い鉛筆でテープを測る課題">
+ <div id="tapeExercise">
+ <div class="tape-top"><span id="tapeProgress"></span><button id="tapeReset" type="button">やりなおす</button></div>
+ <p id="tapePrompt">えんぴつを ならべて はかろう</p>
+ </div>
+ <div id="measureArea"><div id="colorTape"></div><div id="startLine"></div><div id="placedPencils"></div></div>
+ <p id="tapeHint" role="status" aria-live="polite">したの えんぴつを テープの したに はこぼう</p>
+ <div id="pencilBank" aria-label="測るための鉛筆9本"></div>
+ <div id="tapeAnswerArea"><span>えんぴつ</span><output id="tapeAnswer" aria-label="答え"></output><span>ほんぶん</span></div>
+ <div id="tapeNumbers" aria-label="何本分か答える数字ボタン"></div>
+ <div id="tapeDone">4もん おわりました。<br>せんせいに みてもらおう<button id="tapeDoneButton" type="button">確認しました（5秒長押し）<span></span></button></div>
+</section>
+<div id="successCircle" role="status" aria-label="せいかい"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="40" fill="none" stroke="#e60012" stroke-width="5"/></svg></div>
 </div>
 
 <script>
@@ -654,7 +695,7 @@
         document.getElementById('numbers').style.display = 'none';
         document.getElementById('teacherConfirmArea').style.display = 'none';
         document.getElementById('teacherMessage').style.display = 'none';
-        document.getElementById('pencilTask').classList.add('active');
+        startTapeTask();
         selectedRow = null;
         return;
       }
@@ -719,6 +760,7 @@
 
   // 鉛筆課題をリセットし、電車課題を新しいランダム問題で再表示する。
   function resetToTrainTask() {
+    pencilSelectedRow = null;
     // 鉛筆課題の回答状態を消去。
     document.querySelectorAll('#pencilTask .answer-box').forEach(box => {
       box.textContent = '';
@@ -818,7 +860,103 @@
   pencilConfirmButton.addEventListener('pointerleave', cancelPencilHold);
   pencilConfirmButton.addEventListener('contextmenu', event => event.preventDefault());
 
-  // 第2課題（添付プリントの鉛筆）の数字入力
+
+  // テープを、同じ長さの鉛筆を単位にして測る中間課題。
+  const tapeScreen = document.getElementById('tapeTask');
+  const bank = document.getElementById('pencilBank');
+  const placed = document.getElementById('placedPencils');
+  const tape = document.getElementById('colorTape');
+  const hint = document.getElementById('tapeHint');
+  const tapeAnswer = document.getElementById('tapeAnswer');
+  const tapeNumbers = document.getElementById('tapeNumbers');
+  const pencilPicture = '<svg viewBox="0 0 120 48" aria-hidden="true"><path d="M1 12H94V36H1Z" fill="#73933c" stroke="#476326" stroke-width="2"/><path d="M94 12L119 24L94 36Z" fill="#efd2a0"/><path d="M110 20L119 24L110 28Z" fill="#333"/><path d="M5 19H91" stroke="#b4c780" stroke-width="3"/></svg>';
+  let tapeLengths = [], tapeIndex = 0, tapeBusy = false, drag = null;
+  const tapeColors = ['#df638f','#419ed4','#ee9c37','#8c73c9'];
+  function shuffle(values) { for(let i=values.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [values[i],values[j]]=[values[j],values[i]]; } return values; }
+  function refreshTapeInput() {
+    const complete = placed.children.length === tapeLengths[tapeIndex];
+    tapeNumbers.querySelectorAll('button').forEach(b => b.disabled = !complete || tapeBusy);
+    document.getElementById('tapePrompt').textContent = complete ? 'えんぴつ なんぼんぶん？' : 'えんぴつを ならべて はかろう';
+    hint.textContent = complete ? 'かぞえて すうじで こたえよう' : 'ひだりから すきまなく ならべよう';
+    tapeAnswer.textContent = '';
+  }
+  function cancelTapeDrag() {
+    if(!drag) return;
+    drag.ghost.remove(); drag.pencil.style.visibility = ''; drag = null;
+  }
+  function createMeasurePencil(index) {
+    const p = document.createElement('button'); p.type='button'; p.className='measure-pencil';
+    p.dataset.home=String(index); p.setAttribute('aria-label','短い鉛筆をドラッグして並べる'); p.innerHTML=pencilPicture;
+    p.addEventListener('pointerdown', e => {
+      if(tapeBusy || drag || e.button !== 0) return;
+      e.preventDefault(); const rect=p.getBoundingClientRect();
+      const ghost=p.cloneNode(true); ghost.classList.add('drag-pencil'); ghost.style.width=rect.width+'px';
+      ghost.style.left=rect.left+'px'; ghost.style.top=rect.top+'px'; document.body.appendChild(ghost);
+      drag={pencil:p,ghost,dx:e.clientX-rect.left,dy:e.clientY-rect.top,id:e.pointerId};
+      p.style.visibility='hidden'; p.setPointerCapture(e.pointerId);
+    });
+    p.addEventListener('pointermove', e=>{if(!drag || drag.pencil!==p || drag.id!==e.pointerId)return; drag.ghost.style.left=(e.clientX-drag.dx)+'px'; drag.ghost.style.top=(e.clientY-drag.dy)+'px';});
+    p.addEventListener('pointerup', e=>{
+      if(!drag || drag.pencil!==p || drag.id!==e.pointerId)return;
+      const ghostRect=drag.ghost.getBoundingClientRect(), target=placed.getBoundingClientRect();
+      const fromPlaced=p.parentElement===placed;
+      const slot=fromPlaced ? [...placed.children].indexOf(p) : placed.children.length;
+      const targetX=target.left+slot*ghostRect.width;
+      const near=Math.abs(ghostRect.left-targetX)<=ghostRect.width*.65 && Math.abs(ghostRect.top-target.top)<=55;
+      if(!fromPlaced && slot<tapeLengths[tapeIndex] && near) placed.appendChild(p);
+      else if(fromPlaced && !near) {
+        // 途中の鉛筆を戻した場合は、その右側も戻してすき間を残さない。
+        [...placed.children].slice(slot).forEach(item=>bank.children[Number(item.dataset.home)].appendChild(item));
+      }
+      cancelTapeDrag(); refreshTapeInput();
+    });
+    p.addEventListener('pointercancel', cancelTapeDrag);
+    p.addEventListener('lostpointercapture', cancelTapeDrag);
+    return p;
+  }
+  function renderTapeQuestion() {
+    cancelTapeDrag(); tapeBusy=false; placed.innerHTML=''; bank.innerHTML='';
+    document.getElementById('tapeProgress').textContent=(tapeIndex+1)+' / 4';
+    tape.style.width='calc(var(--unit) * '+tapeLengths[tapeIndex]+')'; tape.style.background=tapeColors[tapeIndex];
+    for(let i=0;i<9;i++){const slot=document.createElement('div');slot.className='bank-slot';slot.appendChild(createMeasurePencil(i));bank.appendChild(slot);}
+    refreshTapeInput();
+  }
+  function startTapeTask() {
+    tapeLengths=shuffle([2,3,4,5,6,7,8,9]).slice(0,4); tapeIndex=0;
+    [...tapeScreen.children].forEach(el=>el.style.display=''); document.getElementById('tapeDone').style.display='none';
+    tapeScreen.classList.add('active'); renderTapeQuestion();
+  }
+  for(let i=1;i<=9;i++) {
+    const b=document.createElement('button'); b.type='button';b.className='number-button';b.textContent=String(i);b.disabled=true;
+    b.addEventListener('click',()=>{
+      if(tapeBusy || placed.children.length!==tapeLengths[tapeIndex])return;
+      tapeAnswer.textContent=String(i);
+      if(i!==tapeLengths[tapeIndex]) { hint.textContent='もういちど かぞえてみよう';return; }
+      tapeBusy=true; tapeNumbers.querySelectorAll('button').forEach(item=>item.disabled=true);
+      document.getElementById('successCircle').style.display='flex';
+      setTimeout(()=>{
+        document.getElementById('successCircle').style.display='none'; tapeIndex++;
+        if(tapeIndex<4)renderTapeQuestion();
+        else { [...tapeScreen.children].forEach(el=>el.style.display='none');document.getElementById('tapeDone').style.display='block'; }
+      },1000);
+    }); tapeNumbers.appendChild(b);
+  }
+  document.getElementById('tapeReset').addEventListener('click',()=>{if(!tapeBusy)renderTapeQuestion();});
+  const tapeDoneButton=document.getElementById('tapeDoneButton'); let tapeHoldFrame=null, tapeHoldStart=0;
+  function cancelTapeHold(){cancelAnimationFrame(tapeHoldFrame);tapeHoldFrame=null;tapeDoneButton.querySelector('span').style.width='0';}
+  tapeDoneButton.addEventListener('pointerdown',e=>{
+    if(tapeIndex!==4 || tapeHoldFrame!==null)return;e.preventDefault();tapeHoldStart=performance.now();
+    function tick(now){const ratio=Math.min((now-tapeHoldStart)/5000,1);tapeDoneButton.querySelector('span').style.width=(ratio*100)+'%';
+      if(ratio===1){cancelTapeHold();tapeScreen.classList.remove('active');document.getElementById('pencilTask').classList.add('active');}
+      else tapeHoldFrame=requestAnimationFrame(tick);
+    } tapeHoldFrame=requestAnimationFrame(tick);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(name=>tapeDoneButton.addEventListener(name,cancelTapeHold));
+  tapeDoneButton.addEventListener('contextmenu',e=>e.preventDefault());
+  window.addEventListener('blur',()=>{cancelTapeDrag();cancelTapeHold();});
+  window.addEventListener('resize',cancelTapeDrag);
+
+  // 第3課題（鉛筆）の数字入力
   let pencilSelectedRow = null;
 
   document.querySelectorAll('#pencilTask .answer-box').forEach(box => {
